@@ -1,101 +1,87 @@
-// Function to delete existing applications from QA portal
-export function deleteExistingApplications(ssn = '666000001') {
-  console.log(`🚀 NEW STRATEGY: Starting QA portal cleanup for SSN: ${ssn}`)
+
+
+// Function to handle basic client application screen
+export function basicScreen(
+  initKey,
+  firstName,
+  lastName, 
+  streetAddress,
+  streetNumber,
+  city,
+  stateId,
+  zipCode,
+  ssn,
+  dateOfBirth,
+  phone,
+  email
+) {
+  // Handle the "Unexpected token '<'" error for client application
+  cy.on('uncaught:exception', (err, runnable) => {
+    console.log('Client app uncaught exception:', err.message)
+    return false
+  })
   
-  // We're already on QA portal page, so just start the cleanup process
-  console.log('✅ NEW STRATEGY: Already on QA Portal, starting cleanup...')
+  cy.visit(`https://magwitch.qa.applystage.com/v2/?init_key=${initKey}`)
+  cy.contains('New Application').should('be.visible').click()
   
-  // Search for existing applications
-  cy.contains('Search Applicants by SSN or Phone').scrollIntoView()
-  cy.wait(1000)
+  // Fill the application form
+  cy.get('#loan_product_id').click()
+  cy.contains('.ant-select-item', 'HVAC (New Air Conditioner)').should('be.visible').click()
+  cy.get('#first_name').type(firstName)
+  cy.get('#last_name').type(lastName)
+  cy.get('#street_address').type(streetAddress)
+  cy.wait(2000)
+  cy.get('.street-addManually').should('be.visible').click()
   
-  cy.get('#ssnInput').should('be.visible').clear().type(ssn)
-  cy.wait(500)
+  cy.get('#street_number').should('be.visible').type(streetNumber)
+  cy.get('#city').should('be.visible').type(city)
+  cy.get('#state_id').should('be.visible').type(stateId)
+  cy.get('.ant-select-item-option-content').contains(stateId).should('be.visible').click()    
+  cy.get('#zip_code').type(zipCode)
+  cy.get('#ssn').type(ssn)
+  cy.get('#date_of_birth').type(dateOfBirth)
+  cy.get('#phone').type(phone)
+  cy.get('#email').type(email)
+  cy.get('#email_confirmation').type(email)
+  cy.contains('Next').should('be.visible').click()
   
-  console.log(`🔍 NEW STRATEGY: Searching for SSN: ${ssn}`)
-  cy.get('#searchBySsnForm button[type="submit"]').should('be.visible').click()
-  cy.wait(8000)
-  
-  // Check and delete applications if found
-  cy.get('body').then(($body) => {
-    if ($body.find('#ssnSearchResultsTableBody tr').length > 0) {
-      const tableText = $body.find('#ssnSearchResultsTableBody').text()
-      
-      if (!tableText.includes('No applicants found') && 
-          !tableText.includes('Searching') &&
-          tableText.trim() !== '') {
-        
-        console.log('🗑️ NEW STRATEGY: Found applications, starting deletion...')
-        deleteAllApplicationsRecursively()
-      } else {
-        console.log('ℹ️ NEW STRATEGY: No applications found to delete')
-      }
-    } else {
-      console.log('ℹ️ NEW STRATEGY: No search results found')
+  cy.wait(2000)
+
+  // Conditional: Click "Start New" button only if it's visible
+  cy.get('body').then(($body) => 
+  {
+    if ($body.find('button:contains("Start New")').length > 0) 
+    {
+      cy.contains('button', 'Start New').should('be.visible').click()
+      console.log('Start New')
+    } 
+    else 
+    {
+      console.log('Incomplete Application Not Found')
     }
-    })
+  })
   
-  // Simplified deletion function
-  function deleteAllApplicationsRecursively() {
-    cy.get('#ssnSearchResultsTableBody tr').then(($rows) => {
-      if ($rows.length === 0) {
-        console.log('🎉 NEW STRATEGY: All applications deleted!')
-        return
-      }
-      
-      // Get first applicant ID and delete it
-      cy.wrap($rows.first()).find('td').first().invoke('text').then((applicantId) => {
-        const id = applicantId.trim()
-        console.log(`🗑️ NEW STRATEGY: Deleting applicant ID: ${id}`)
-        
-        // Go to delete section
-        cy.contains('Delete Applicant').scrollIntoView()
-        cy.wait(1000)
-        
-        // Enter ID and delete
-        cy.get('#applicantId').should('be.visible').clear().type(id)
-        cy.wait(500)
-        
-        // Stub confirmation dialog
-        cy.window().then((win) => {
-          cy.stub(win, 'confirm').returns(true)
-        })
-        
-        // Click delete
-        cy.get('#deleteApplicantForm button[type="submit"]').should('be.visible').click()
-        cy.wait(5000)
-        
-        console.log(`✅ NEW STRATEGY: Deleted applicant ID: ${id}`)
-        
-        // Search again to check for more
-        cy.contains('Search Applicants by SSN or Phone').scrollIntoView()
-        cy.wait(1000)
-        
-        cy.get('#ssnInput').should('be.visible').clear().type(ssn)
-        cy.wait(500)
-        
-        cy.get('#searchBySsnForm button[type="submit"]').should('be.visible').click()
-        cy.wait(6000)
-        
-        // Check if more applications exist and continue
-        cy.get('body').then(($body) => {
-          if ($body.find('#ssnSearchResultsTableBody tr').length > 0) {
-            const remainingText = $body.find('#ssnSearchResultsTableBody').text()
-            
-            if (!remainingText.includes('No applicants found') && 
-                !remainingText.includes('Searching') &&
-                remainingText.trim() !== '') {
-              
-              console.log('🔄 NEW STRATEGY: More applications found, continuing deletion...')
-              deleteAllApplicationsRecursively() // Continue recursively
-            } else {
-              console.log('🎉 NEW STRATEGY: All applications cleaned up!')
-            }
-          } else {
-            console.log('🎉 NEW STRATEGY: All applications cleaned up!')
-          }
-        })
-      })
-    })
-  }
+  // OTP Handling with retry logic
+  cy.get('input[type="tel"][inputmode="numeric"]').first().clear().type('4124')
+  cy.contains('Verify').should('be.visible').click()
+  cy.wait(5000)
+
+  cy.get('body').then(($body) => {
+    const errorDiv = $body.find('div.flex.items-center.justify-center').filter(':contains("Invalid OTP! Please try again.")')
+    if (errorDiv.length > 0 || $body.text().includes('Invalid OTP! Please try again.')) 
+    {
+      console.log('Invalid OTP detected, waiting for 5 minutes timer...')
+      cy.wait(300000)
+      cy.get('span').contains('Resend').should('be.visible').click()
+      console.log('Resend button clicked')
+      cy.wait(2000)
+      cy.get('input[type="tel"][inputmode="numeric"]').first().clear().type('4124')
+      cy.contains('Verify').should('be.visible').click()
+      console.log('OTP re-entered and verify clicked') 
+    } 
+    else 
+    {
+      console.log('OTP accepted on first try')
+    }
+  })
 }
